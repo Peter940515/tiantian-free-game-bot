@@ -1,0 +1,38 @@
+name: 天天情報網 Free Games Bot
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-free-games:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check free games RSS
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python check_free_games.py
+
+      - name: Save seen items
+        run: |
+          git config user.name "tiantian-bot"
+          git config user.email "tiantian-bot@users.noreply.github.com"
+          git add seen_items.json
+          git diff --cached --quiet || git commit -m "Update seen free game items"
+          git push
