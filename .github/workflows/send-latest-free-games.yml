@@ -8,58 +8,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send latest free game posts to Discord
+      - name: Install dependencies
+        run: pip install feedparser
+
+      - name: Send latest free game post to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python - <<'PY'
           import os
+          import re
+          import html
+          import feedparser
           import requests
 
-          REDDIT_URL = "https://www.reddit.com/r/FreeGameFindings/new.json?limit=5"
+          RSS_URL = "https://www.reddit.com/r/FreeGameFindings/new/.rss"
           WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 
-          headers = {
-              "User-Agent": "tiantian-free-game-bot/1.0"
-          }
+          feed = feedparser.parse(RSS_URL)
 
-          response = requests.get(REDDIT_URL, headers=headers, timeout=20)
-          response.raise_for_status()
-          data = response.json()
+          def find_external_link(entry):
+              reddit_link = entry.get("link", "")
 
-          posts = []
+              text_parts = [
+                  entry.get("summary", ""),
+                  entry.get("description", ""),
+              ]
 
-          for child in data.get("data", {}).get("children", []):
-              post = child.get("data", {})
+              for content in entry.get("content", []):
+                  text_parts.append(content.get("value", ""))
 
-              title = post.get("title", "未知遊戲情報")
-              reddit_link = "https://www.reddit.com" + post.get("permalink", "")
-              external_link = (
-                  post.get("url_overridden_by_dest")
-                  or post.get("url")
-                  or reddit_link
-              )
+              full_text = "\n".join(text_parts)
+              full_text = html.unescape(full_text)
 
-              posts.append({
-                  "title": title,
-                  "external_link": external_link,
-                  "reddit_link": reddit_link
-              })
+              links = re.findall(r'href="([^"]+)"', full_text)
 
-          if not posts:
+              for link in links:
+                  if "reddit.com" not in link and "redd.it" not in link:
+                      return link
+
+              return reddit_link
+
+          entries = feed.entries[:5]
+
+          if not entries:
               message = "【天天情報網｜即時測試】\n\n目前沒有抓到任何免費遊戲情報。"
           else:
-              lines = ["【天天情報網｜即時免費遊戲情報測試】\n"]
+              entry = entries[0]
 
-              for i, post in enumerate(posts[:3], start=1):
-                  lines.append(
-                      f"{i}. 🎮 {post['title']}\n"
-                      f"🔗 領取 / 商店連結：\n{post['external_link']}\n"
-                      f"🧾 情報來源：\n{post['reddit_link']}\n"
-                  )
+              title = entry.get("title", "未知遊戲情報")
+              reddit_link = entry.get("link", "")
+              external_link = find_external_link(entry)
 
-              lines.append("⚠️ 這是手動測試抓取，實際平台、免費類型與截止時間請以原文及商店頁面為準。")
-              message = "\n".join(lines)
+              message = f"""【天天情報網｜即時免費遊戲情報測試】
+
+          🎮 {title}
+
+          🔗 領取 / 商店連結：
+          {external_link}
+
+          🧾 情報來源：
+          {reddit_link}
+
+          ⚠️ 這是手動測試抓取，實際平台、免費類型與截止時間請以原文及商店頁面為準。"""
 
           discord_response = requests.post(
               WEBHOOK_URL,
@@ -70,6 +81,9 @@ jobs:
               timeout=20
           )
 
+          print("Discord status:", discord_response.status_code)
+          print(discord_response.text)
+
           discord_response.raise_for_status()
-          print("Sent latest free game posts to Discord.")
+          print("Sent latest free game post to Discord.")
           PY
