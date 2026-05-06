@@ -1,0 +1,21 @@
+name: 測試 Discord 通知
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send test message to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d '{
+            "username": "天天情報員",
+            "content": "【天天情報網｜測試通知】\n\n🎮 測試遊戲：小汪流浪日誌 Demo\n🔗 https://store.steampowered.com/\n\n✅ 如果你看到這則訊息，代表 GitHub → Discord 自動通知成功！\n\n⚠️ 這只是測試訊息，不是真正限免情報。"
+          }' \
+          "$DISCORD_WEBHOOK_URL"
