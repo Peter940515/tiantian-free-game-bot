@@ -1,0 +1,53 @@
+name: 立即抓取最新免費遊戲情報
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-latest-free-games:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: pip install feedparser requests
+
+      - name: Send latest free game posts to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import feedparser
+          import requests
+
+          RSS_URL = "https://www.reddit.com/r/FreeGameFindings/new/.rss"
+          WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+
+          feed = feedparser.parse(RSS_URL)
+
+          entries = feed.entries[:3]
+
+          if not entries:
+              message = "【天天情報網｜即時測試】\n\n目前 RSS 沒有抓到任何免費遊戲情報。"
+          else:
+              lines = ["【天天情報網｜即時免費遊戲情報測試】\n"]
+              for i, entry in enumerate(entries, start=1):
+                  title = entry.get("title", "未知標題")
+                  link = entry.get("link", "")
+                  lines.append(f"{i}. 🎮 {title}\n🔗 {link}\n")
+
+              lines.append("⚠️ 這是手動測試抓取，實際平台、免費類型與截止時間請以原文及商店頁面為準。")
+              message = "\n".join(lines)
+
+          response = requests.post(
+              WEBHOOK_URL,
+              json={
+                  "username": "天天情報員",
+                  "content": message
+              },
+              timeout=20
+          )
+
+          response.raise_for_status()
+          print("Sent latest free game posts to Discord.")
+          PY
